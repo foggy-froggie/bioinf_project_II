@@ -8,6 +8,7 @@ from tdc.single_pred import ADME
 from rdkit import Chem
 from rdkit.Chem import Descriptors
 
+# %%
 # 1. Data retrival
 data = ADME(name = 'Solubilit`y_AqSolDB')
 df = data.get_data()

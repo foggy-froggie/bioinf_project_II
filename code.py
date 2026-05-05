@@ -159,16 +159,6 @@ fingerprint_df["embedding_y"] = embedding[:, 1]
 sns.set()
 
 # %%
-sns.scatterplot(
-    data=fingerprint_df,
-    x="embedding_x",
-    y="embedding_y",
-    hue="split",
-    s=5,
-    alpha=1,
-)
-
-# %%
 ax = sns.scatterplot(
     data=fingerprint_df,
     x="embedding_x",
@@ -182,6 +172,24 @@ sm = plt.cm.ScalarMappable(cmap="RdBu", norm=norm)
 sm.set_array([])
 ax.get_legend().remove()
 ax.figure.colorbar(sm, label="Y", ax=ax)
+# %% [markdown]
+# We can see two large clusters, they are close toghether, but visually easily separable.
+# Unfortunately, they don't cleanly separate based on labels.
+# Most points are blue (high label value), there are a few red regions (low label value), but they are mostly mixed with blue and hard to separate.
+# This indicates that training a good model might not be easy.
+
+# %%
+sns.scatterplot(
+    data=fingerprint_df,
+    x="embedding_x",
+    y="embedding_y",
+    hue="split",
+    s=5,
+    alpha=1,
+)
+# %% [markdown]
+# Datasets are thoroughly mixed, as expected with a random split.
+# This isn't good for training, we need a different split method to separate train and test datasets.
 
 # %%
 # choose a random subset of points to decrease plot density

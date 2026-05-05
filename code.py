@@ -197,12 +197,3 @@ sns.scatterplot(
 # This isn't good for training, we need a different split method to separate train and test datasets.
 
 # %%
-# choose a random subset of points to decrease plot density
-sns.scatterplot(
-    data=fingerprint_df.sample(500),
-    x="embedding_x",
-    y="embedding_y",
-    hue="split",
-    s=20,
-    alpha=1,
-)

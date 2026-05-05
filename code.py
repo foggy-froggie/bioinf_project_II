@@ -68,7 +68,12 @@ print(f"Molecules with at least one unspecified stereocenter: {len(unspecified_m
 print(f"Molecules with partial chirality (some centers known, some not): {len(partial_chirality)}")
 
 # %% [markdown]
-# In Task 3, I identified molecules with unspecified and partial stereochemistry. I found that X molecules had at least one undefined chiral center. While these could be standardized, I recommend removal (or at least caution) because undefined stereochemistry introduces noise. Stereochemistry significantly impacts the label (solubility) because different 3D arrangements affect crystal lattice energy and packing, leading to different experimental solubility values for the same 2D structure
+# Unspecified Stereocenters: Out of the dataset, 2169 molecules were identified as having at least one unspecified chiral center, meaning their exact 3D structural orientation is unknown in the dataset.
+# Partial Chirality: Among those, 68 molecules exhibit partial chirality, where some stereocenters are clearly defined while others remain ambiguous.
+# Stereochemistry can affect solubility as 3D geometry influences crystal packing and water interactions.
+# Therefore, molecules with unspecified stereocenters may introduce unclarity in the target variable.
+# However for our model we use Morgan fingerprints without chirality encoding, which are based on 2D molecular topology and do not capture stereochemical information.
+# Hence we keep all the molecules keeping the size of the originial dataset, while understanding that they may introduce some level of noise.
 
 # %% TASK 4
 

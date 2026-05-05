@@ -12,4 +12,5 @@ dependencies = [
     "pytdc>=0.3.6",
     "rdkit>=2026.3.1",
     "seaborn>=0.13.2",
+    "umap-learn>=0.5.12",
 ]

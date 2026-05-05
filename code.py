@@ -10,11 +10,21 @@ from rdkit.Chem import Descriptors, rdFingerprintGenerator
 import umap
 import numpy as np
 from matplotlib import pyplot as plt
+import seaborn as sns
 
 # %%
 # 1. Data retrival
 data = ADME(name = 'Solubilit`y_AqSolDB')
-df = data.get_data()
+
+def get_split_data(data):
+    split = data.get_split()
+    train, test, valid = split["train"], split["test"], split["valid"]
+    train["split"] = "train"
+    test["split"] = "test"
+    valid["split"] = "valid"
+    return pd.concat([train, test, valid])
+
+df = get_split_data(data)
 
 # 2. Conversion SMILES → Molecule Objects
 df['mol'] = df['Drug'].apply(lambda x: Chem.MolFromSmiles(x))
@@ -141,6 +151,26 @@ column_name = f'morgan_r{2}_l{512}'
 features = np.array(list(fingerprint_df[column_name]))
 embedding = reducer.fit_transform(features)
 embedding.shape
+fingerprint_df["embedding_x"] = embedding[:, 0]
+fingerprint_df["embedding_y"] = embedding[:, 1]
 
 # %%
-plt.scatter(*embedding.T, s=1, alpha=0.1)
+sns.scatterplot(
+    data=fingerprint_df,
+    x="embedding_x",
+    y="embedding_y",
+    hue="split",
+    s=5,
+    alpha=0.5,
+)
+
+# %%
+# choose a random subset of points to decrease plot density
+sns.scatterplot(
+    data=fingerprint_df.sample(500),
+    x="embedding_x",
+    y="embedding_y",
+    hue="split",
+    s=20,
+    alpha=1,
+)

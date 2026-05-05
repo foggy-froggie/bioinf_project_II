@@ -7,6 +7,9 @@ import pandas as pd
 from tdc.single_pred import ADME
 from rdkit import Chem
 from rdkit.Chem import Descriptors, rdFingerprintGenerator
+import umap
+import numpy as np
+from matplotlib import pyplot as plt
 
 # %%
 # 1. Data retrival
@@ -133,3 +136,11 @@ display_cols = [col for col in fingerprint_df.columns
 fingerprint_df[display_cols].head()
 
 # %%
+reducer = umap.UMAP()
+column_name = f'morgan_r{2}_l{512}'
+features = np.array(list(fingerprint_df[column_name]))
+embedding = reducer.fit_transform(features)
+embedding.shape
+
+# %%
+plt.scatter(*embedding.T, s=1, alpha=0.1)

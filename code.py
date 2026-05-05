@@ -125,7 +125,7 @@ def assign_morgan_fingerprints(df):
                         # Generate Morgan fingerprint using rdFingerprintGenerator
                         fp = fpgen.GetFingerprint(mol)
                         # Convert to list for storage in dataframe
-                        fingerprints.append(list(fp))
+                        fingerprints.append(fp)
                     except Exception as e:
                         print(f"Warning: Failed to generate fingerprint for molecule {idx}: {e}")
                         fingerprints.append(None)

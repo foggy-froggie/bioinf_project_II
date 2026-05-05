@@ -6,7 +6,7 @@
 import pandas as pd
 from tdc.single_pred import ADME
 from rdkit import Chem
-from rdkit.Chem import Descriptors
+from rdkit.Chem import Descriptors, rdFingerprintGenerator
 
 # %%
 # 1. Data retrival
@@ -55,3 +55,81 @@ print(f"Molecules with partial chirality (some centers known, some not): {len(pa
 
 # %% [markdown]
 # In Task 3, I identified molecules with unspecified and partial stereochemistry. I found that X molecules had at least one undefined chiral center. While these could be standardized, I recommend removal (or at least caution) because undefined stereochemistry introduces noise. Stereochemistry significantly impacts the label (solubility) because different 3D arrangements affect crystal lattice energy and packing, leading to different experimental solubility values for the same 2D structure
+
+# %% TASK 4
+
+def assign_morgan_fingerprints(df):
+    """
+    Assigns Morgan fingerprints with different radius and length combinations.
+    Creates 9 versions: radius 1, 2, 3 and length 512, 1024, 2048.
+    
+    Args:
+        df (pd.DataFrame): DataFrame with parsed molecules including 'mol' column
+        
+    Returns:
+        pd.DataFrame: New dataframe with original columns plus 9 Morgan fingerprint columns
+    """
+    if len(df) == 0:
+        print("No molecules to process.")
+        return pd.DataFrame()
+    
+    if 'mol' not in df.columns:
+        print("Error: 'mol' column not found in dataframe.")
+        return df
+    
+    # Create a copy of the dataframe
+    new_df = df.copy()
+    
+    # Define radius and length combinations
+    radii = [1, 2, 3]
+    lengths = [512, 1024, 2048]
+    
+    print(f"\nGenerating Morgan fingerprints for {len(df)} molecules...")
+    print(f"  Radius options: {radii}")
+    print(f"  Length options: {lengths}")
+    print(f"  Total combinations: {len(radii) * len(lengths)}")
+    
+    # Generate fingerprints for each combination
+    for radius in radii:
+        for length in lengths:
+            column_name = f'morgan_r{radius}_l{length}'
+            fingerprints = []
+            # Create generator once per combination (can be reused for all molecules)
+            fpgen = rdFingerprintGenerator.GetMorganGenerator(radius, length)
+            
+            for idx, row in df.iterrows():
+                mol = row['mol']
+                if mol is None:
+                    fingerprints.append(None)
+                else:
+                    try:
+                        # Generate Morgan fingerprint using rdFingerprintGenerator
+                        fp = fpgen.GetFingerprint(mol)
+                        # Convert to list for storage in dataframe
+                        fingerprints.append(list(fp))
+                    except Exception as e:
+                        print(f"Warning: Failed to generate fingerprint for molecule {idx}: {e}")
+                        fingerprints.append(None)
+            
+            new_df[column_name] = fingerprints
+            print(f"  Generated: {column_name}")
+    
+    print(f"\nMorgan fingerprint assignment complete!")
+    print(f"  New dataframe shape: {new_df.shape}")
+    print(f"  New columns added: {len(radii) * len(lengths)}")
+    
+    return new_df
+
+# Assign fingerprints
+print("Assigning Morgan fingerprints...")
+fingerprint_df = assign_morgan_fingerprints(df)
+
+print(f"\nFingerprint dataframe shape: {fingerprint_df.shape}")
+print(f"Fingerprint dataframe columns: {fingerprint_df.columns.tolist()}")
+print(f"\nFirst few rows (showing non-fingerprint columns):")
+# Display without the mol and fingerprint columns
+display_cols = [col for col in fingerprint_df.columns 
+               if col != 'mol' and not col.startswith('morgan_')]
+fingerprint_df[display_cols].head()
+
+# %%

@@ -45,6 +45,7 @@ print(summary_table)
 df['InChIKey'] = df['mol'].apply(lambda x: Chem.MolToInchiKey(x))
 duplicates = df[df.duplicated('InChIKey', keep=False)].sort_values('InChIKey')
 num_duplicates = df.duplicated('InChIKey').sum()
+assert int(num_duplicates) == 0
 # No dupliacates
 
 # %% TASK 3
@@ -155,14 +156,32 @@ fingerprint_df["embedding_x"] = embedding[:, 0]
 fingerprint_df["embedding_y"] = embedding[:, 1]
 
 # %%
+sns.set()
+
+# %%
 sns.scatterplot(
     data=fingerprint_df,
     x="embedding_x",
     y="embedding_y",
     hue="split",
     s=5,
-    alpha=0.5,
+    alpha=1,
 )
+
+# %%
+ax = sns.scatterplot(
+    data=fingerprint_df,
+    x="embedding_x",
+    y="embedding_y",
+    hue="Y",
+    s=5,
+    palette="RdBu",
+)
+norm = plt.Normalize(df.Y.min(), df.Y.max())
+sm = plt.cm.ScalarMappable(cmap="RdBu", norm=norm)
+sm.set_array([])
+ax.get_legend().remove()
+ax.figure.colorbar(sm, label="Y", ax=ax)
 
 # %%
 # choose a random subset of points to decrease plot density

@@ -498,17 +498,17 @@ model = xgb.XGBRegressor(
 model = xgb.XGBRegressor(
     n_estimators=1000,        # large, but use early stopping
     learning_rate=0.03,      # small = safer generalization
-    max_depth=10,             # shallow trees reduce overfitting
+    max_depth=6,             # shallow trees reduce overfitting
     min_child_weight=5,      # prevents tiny leaf splits
     subsample=0.7,           # row sampling
-    colsample_bytree=0.8,    # VERY important for high-dim data
+    colsample_bytree=0.3,    # VERY important for high-dim data
     reg_alpha=1.0,           # L1 regularization (feature selection)
     reg_lambda=5.0,          # L2 regularization
     gamma=1.0,               # require meaningful splits
     objective='reg:squarederror',
     tree_method='hist',      # faster + good default
     random_state=42,
-    early_stopping_rounds=10,
+    early_stopping_rounds=20,
 )
 
 # %%
@@ -711,7 +711,7 @@ def train_xgboost_models(train_df, test_df, target_name):
 
 # Train XGBoost models
 print("Training XGBoost models...")
-xgboost_results, best_model_info = train_xgboost_models(fdf.loc[fdf.split == "train"], fdf.loc[fdf.split == "train"], "Y")
+xgboost_results, best_model_info = train_xgboost_models(fdf.loc[fdf.split == "train"], fdf.loc[fdf.split == "test"], "Y")
 
 print(f"\nFinal results dictionary:")
 print(xgboost_results)

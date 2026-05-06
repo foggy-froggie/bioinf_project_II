@@ -232,14 +232,22 @@ sns.scatterplot(
 fdf = fingerprint_df
 
 # %%
-train = fdf.loc[fdf["split_random"] == "train", column_name].to_list()
-test = fdf.loc[fdf["split_random"] == "test", column_name].to_list()
-train_train_similarity = np.array([BulkTanimotoSimilarity(e, train) for e in train])
-train_test_similarity = np.array([BulkTanimotoSimilarity(e, test) for e in train])
-test_test_similarity = np.array([BulkTanimotoSimilarity(e, test) for e in test])
+def calculate_similarities(df, split_col, fingerprint_col):
+    keys = ["train", "valid", "test"]
+    fingerprints = {}
+    for key in keys:
+        fingerprints[key] = df.loc[df[split_col] == key, fingerprint_col].to_list()
+    
+    key_pairs = [*((a, a) for a in keys), *((a, b) for i, a in enumerate(keys) for b in keys[i+1:])]
+    similarities = {}
+    for a, b in key_pairs:
+        similarities[f"{a}_{b}"] = np.array([BulkTanimotoSimilarity(e, fingerprints[a]) for e in fingerprints[b]])
+        # similarities[f"{b}_{a}"] = similarities[f"{a}_{b}"]
+    return similarities
 
+similarities = calculate_similarities(fdf, "split_random", column_name)
 # %%
-plt.hist(train_test_similarity.max(axis=0))
+plt.hist(similarities["train_test"].max(axis=0))
 # %% [markdown]
 # We can see there's a lot of high similarity values and there's not much difference between intra- and inter-dataset similarity distributions.
 # That's bad. We need a better split.
@@ -247,12 +255,13 @@ plt.hist(train_test_similarity.max(axis=0))
 # %%
 # line histogram insted of KDE plot, because KDE is very slow for this large data set
 def plot_hist(data, bins=20, range=(0, 1), density=True, **kwargs):
-    hist, bin_edges = np.histogram(data, bins=bins, range=range, density=density, **kwargs)
+    hist, bin_edges = np.histogram(data, bins=bins, range=range, density=density)
     bin_centers = (bin_edges[1:] + bin_edges[:-1]) / 2
-    plt.plot(bin_centers, hist)
-plot_hist(train_train_similarity)
-plot_hist(train_test_similarity)
-plot_hist(test_test_similarity)
+    plt.plot(bin_centers, hist, **kwargs)
+for key in similarities:
+    plot_hist(similarities[key], label=key)
+plt.legend()
+
 # %% [markdown]
 # This is even worse.
 # Density plots/histograms of train-train, train-test and test-test similarities are identical.

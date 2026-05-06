@@ -245,7 +245,8 @@ similarities = calculate_similarities(fdf, "split_random", column_name)
 # %%
 plt.hist(similarities["train_test"].max(axis=0))
 # %% [markdown]
-# We can see there's a lot of high similarity values and there's not much difference between intra- and inter-dataset similarity distributions.
+# We can see there's a lot of high maximum similarity values between train and test dataset,
+# which means there's quite a bit of very similar molecules in the two datasets.
 # That's bad. We need a better split.
 
 # %%
@@ -260,9 +261,42 @@ plt.legend()
 
 # %% [markdown]
 # This is even worse.
-# Density plots/histograms of train-train, train-test and test-test similarities are identical.
-# This means the data in train and test datasets is basically identically distributed and the test dataset doesn't represent any genuinely new chemistry.
+# Density plots/histograms of inter- and intra-dataset similarities are identical.
+# This means the data in train, valid and test datasets is basically identically distributed and the test dataset doesn't represent any genuinely new chemistry.
 # We need a better split.
+
+# %%
+sns.scatterplot(
+    data=fdf,
+    x="embedding_x",
+    y="embedding_y",
+    hue="split_scaffold",
+    s=5,
+    alpha=1,
+)
+# %% [markdown]
+# With scaffold split, we see more clearly separable datasets.
+# They are still mixed, but we can separate larger regions of specific colors, not only individual randomly mixed points.
+
+#%%
+similarities = calculate_similarities(fdf, "split_scaffold", column_name)
+# %%
+plt.hist(similarities["train_test"].max(axis=0))
+# %% [markdown]
+# We can see a lot less high similarity values between train and test datasets.
+# Better than random split.
+
+# %%
+# line histogram insted of KDE plot, because KDE is very slow for this large data set
+for key in similarities:
+    plot_hist(similarities[key], label=key)
+plt.legend()
+# %% [markdown]
+# Inter- and intra-dataset similarity score distributions are still similar, but at least they aren't identical.
+# We can also see that the 3 distributions involving the train dataset are the most spread out.
+# That would make some sense, because the train dataset is significantly larger (70%) than valid (10%) and test (20%).
+#
+# Anyway, the scaffold split is definitely better than random. Still not ideal, but better.
 
 # %%
 # choose the better split to be used in downstream code

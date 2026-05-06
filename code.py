@@ -263,14 +263,13 @@ plot_hist(test_test_similarity)
 # choose the better split to be used in downstream code
 fdf["split"] = fdf["split_scaffold"]
 
+
+
+
 # %% task 5
 df_5 = fdf.copy()
 
-
-
 # %% TASK 5.1
-# Dataset Diversity Analysis
-
 # descributions
 df_5['HeavyAtomCount'] = df_5['mol'].apply(Descriptors.HeavyAtomCount)
 df_5['RingCount'] = df_5['mol'].apply(Descriptors.RingCount)
@@ -289,23 +288,26 @@ task5_desc = [
 
 task5_summary_table = df_5[task5_desc].describe()
 
-print("--- Task 5.1 Summary Table ---")
+print("Task 5.1 Summary Table")
 print(task5_summary_table)
 
 
+# %%
 task5_summary_by_split = df_5.groupby('split')[task5_desc].describe()
 
-print("--- Task 5.1 Summary Table by Split ---")
+print("Task 5.1 Summary Table by Split")
 print(task5_summary_by_split)
 
 
+# %%
 # Histograms 
-for descriptor in task5_desc:
+# in the task it was written to compare across train vs test but we added also valid
+for describ in task5_desc:
     plt.figure(figsize=(8, 5))
     
     sns.histplot(
         data=df_5,
-        x=descriptor,
+        x=describ,
         hue='split',
         kde=True,
         stat='density',
@@ -313,20 +315,61 @@ for descriptor in task5_desc:
         element='step'
     )
     
-    plt.title(f'Distribution of {descriptor} across train/test/valid')
-    plt.xlabel(descriptor)
+    plt.title(f'Distribution of {describ} across train/test/valid')
+    plt.xlabel(describ)
     plt.ylabel('Density')
     plt.tight_layout()
     plt.show()
 
-
-
-for descriptor in ['MolWt', 'HeavyAtomCount']:
+# %% [markdown]
+# The molecular weight distribution is definitely right-skewed.
+# Most molecules
+# are concentrated in the low molecular weight range, while a small number of 
+# compounds have high molecular weight values. This indicates the presence of 
+# outliers or chemically unusual large molecules. 
+# The train, test, and validation subsets show rather similar distributions,
+# suggesting that the split preserves the general molecular size profile of the 
+# dataset.
+#
+#The heavy atom count distribution is also strongly right-skewed.
+# Most molecules contain a relatively small number of heavy atoms,
+# while a small fraction of compounds have much higher heavy atom
+# counts. This pattern is consistent with the molecular weight 
+# distribution.
+# The train, test, and validation subsets overlap, 
+# indicating that the split maintains similar size-related 
+# chemical diversity across subsets.
+#
+#The RingCount distribution shows that most molecules contain a small number
+# of rings, mainly between 0 and 5. The distribution is strongly right-skewed, 
+# with only a small number of molecules containing more rings. 
+# The train, test, and validation subsets overlap, although the 
+# validation subset appears more concentrated around slightly higher ring 
+# counts and small differences between subsets are visible.
+#
+#The NumRotatableBonds distribution is also strongly right-skewed. 
+# Most molecules have a low number of rotatable bonds. A small fraction of
+# molecules has a very high number of rotatable bonds, forming a long tail 
+# toward larger values.
+#The train, test, and validation distributions are similar.
+#
+#The ALOGP distribution is centered around low to moderate values, with most 
+# molecules located approximately between 0 and 5. This suggests that the
+# dataset mainly contains compounds with moderate lipophilicity. 
+# The distribution also contains extreme values on both sides, 
+# especially very low and very high ALOGP values, which may correspond to
+#  unusual or outlier molecules.
+#The train, test, and validation subsets have similar overall shapes, 
+# but the validation subset appears slightly shifted toward higher ALOGP 
+# values. This may indicate that in validation subset molecules are, on average, 
+# slightly more lipophilic.
+# %% hist log
+for describ in ['MolWt', 'HeavyAtomCount']:
     plt.figure(figsize=(8, 5))
     
     sns.histplot(
         data=df_5,
-        x=descriptor,
+        x=describ,
         hue='split',
         kde=True,
         stat='density',
@@ -335,44 +378,76 @@ for descriptor in ['MolWt', 'HeavyAtomCount']:
     )
     
     plt.xscale("log")
-    plt.title(f'Log-scale distribution of {descriptor} across train/test/valid')
-    plt.xlabel(descriptor)
+    plt.title(f'Log-scale distribution of {describ} across train/test/valid')
+    plt.xlabel(describ)
     plt.ylabel('Density')
     plt.tight_layout()
     plt.show()
 
-
-
-
+# %% [markdown]
+#The log-scale MolWt distribution provides a clearer view of the main 
+# molecular weight range by reducing the visual effect of extreme 
+# high-molecular-weight outliers so the differences beetween subsets are more visible. 
+# The train subset shows higher density at lower molecular weights, 
+# while the test and validation subsets appear slightly shifted toward higher
+#  molecular weights. However, the three subsets still overlap.
+#
+#The log-scale HeavyAtomCount distribution shows a similar pattern
+# to the molecular weight distribution.
+# The train subset has higher density at lower heavy atom counts, whereas the
+#  test and validation subsets are slightly shifted toward higher values. 
+# This indicates that test and validation may contain somewhat larger or more
+#  complex molecules compared with train. This is consistent with the MolWt 
+# distribution, because both descriptors describe molecular size.
+# %%
 # boxplots
 
-for descriptor in task5_desc:
+for describ in task5_desc:
     plt.figure(figsize=(7, 5))
     
     sns.boxplot(
         data=df_5,
         x='split',
-        y=descriptor
+        y=describ
     )
     
     plt.yscale("log")
-    plt.title(f'{descriptor} by split')
+    plt.title(f'{describ} by split')
     plt.xlabel('Split')
-    plt.ylabel(descriptor)
+    plt.ylabel(describ)
     plt.tight_layout()
     plt.show()
 
-
+# %% [markdown]
+#The boxplots confirm the trends observed in the histogram.
+#  For size-related descriptors, such as MolWt and HeavyAtomCount, the train 
+# subset has lower median values, while the test and validation subsets are 
+# slightly shifted toward higher values. This suggests that test and 
+# validation contain somewhat larger or more complex molecules on average.
+#
+#A similar pattern is visible for RingCount and ALOGP, where test and 
+# especially validation tend to show slightly higher median values than 
+# train. This may indicate that these subsets contain more cyclic and more 
+# lipophilic compounds. For NumRotatableBonds, the differences between 
+# subsets are smaller, although all subsets contain outliers with high 
+# values.
+#
+#Overall, the boxplots show that the subsets largely overlap, but the split
+#  introduces some physicochemical differences between train, test, and
+#  validation. These differences may make model evaluation more realistic,
+#  because the model is tested on molecules that are not perfectly identical
+#  in descriptor distribution to the training set.
 # %% TASK 5.2
 correlation_columns = task5_desc + ['Y']
 
-# Spearman correlation is used because it captures monotonic relationships,
-# not only strictly linear relationships.
+# we used sperman correlation to because it sees monotonic relations not strictly linear
 correlation_matrix = df_5[correlation_columns].corr(method='spearman')
 
-print("--- Task 5.2 Spearman Correlation Matrix ---")
+print("Task 5.2 Spearman Correlation Matrix ")
 print(correlation_matrix)
 
+
+# %%
 # Heatmap
 plt.figure(figsize=(8, 6))
 
@@ -395,8 +470,40 @@ cor_mat = (
     .sort_values(key=lambda x: abs(x), ascending=False)
 )
 
-print("--- Task 5.2 Correlations with Y ---")
+print("Task 5.2 Correlations with Y")
 print(cor_mat)
+
+# %% [markdown]
+#The Spearman correlation matrix shows that ALOGP has the strongest 
+# correlation with the target value Y, with a correlation of -0.74. 
+# This is a strong negative correlation, meaning that molecules with 
+# higher ALOGP values tend to have lower aqueous solubility. This is 
+# chemically meaningful, because more lipophilic molecules usually dissolve 
+# less easily in water.
+#
+# MolWt and HeavyAtomCount also show moderate negative correlations with Y,
+# equal to -0.54 and -0.51. This suggests that larger molecules tend to be 
+# less soluble. 
+# RingCount also has a weaker negative correlation with Y 
+# (-0.40), meaning that molecules with more rings may also tend to have 
+# lower solubility. 
+#
+# NumRotatableBonds has the weakest correlation with Y 
+# (-0.17), so it appears to be the least predictive descriptor among those 
+# analyzed.
+#
+# The features that appear most predictive are ALOGP, MolWt, and 
+# HeavyAtomCount, because they have the strongest absolute correlations 
+# with Y. ALOGP is especially important because it directly reflects 
+# lipophilicity, which is related to water solubility.
+# 
+# Some correlations should be interpreted carefully. MolWt and 
+# HeavyAtomCount are very strongly correlated with each other (0.93), 
+# they may encode similar information about molecular size. 
+# Therefore, their separate correlations with Y are not fully independent. 
+# Correlations such as NumRotatableBonds with Y are small and may be less 
+# useful or potentially even spurious. 
+
 
 # %% TASK 6
 # %% [markdown]

@@ -13,6 +13,8 @@ import umap
 import numpy as np
 from matplotlib import pyplot as plt
 import seaborn as sns
+import xgboost as xgb
+from sklearn.metrics import mean_squared_error
 
 # %%
 # 1. Data retrival
@@ -232,3 +234,192 @@ plot_hist(test_test_similarity)
 # We need a better split.
 
 # %%
+def train_xgboost_models(train_df, test_df, target_name):
+    """
+    Trains XGBoost models using all 9 Morgan fingerprint combinations.
+    Calculates accuracy on test set for each model and keeps the best model.
+    
+    Args:
+        train_df (pd.DataFrame): Training dataframe with fingerprint columns
+        test_df (pd.DataFrame): Test dataframe with fingerprint columns
+        
+    Returns:
+        tuple: (results_dict, best_model_info) where:
+            - results_dict: Dictionary with fingerprint names as keys and accuracies as values
+            - best_model_info: Dictionary with 'model', 'fingerprint_col', 'accuracy', 
+                             'X_train', 'X_test', 'y_train', 'y_test' for the best model
+    """
+    if len(train_df) == 0 or len(test_df) == 0:
+        print("Error: Train or test dataframes are empty.")
+        return {}, {}
+    
+    # Get all Morgan fingerprint columns
+    fingerprint_cols = [col for col in train_df.columns if col.startswith('morgan_')]
+    
+    if len(fingerprint_cols) == 0:
+        print("Error: No Morgan fingerprint columns found.")
+        return {}, {}
+    
+    print(f"\nTraining XGBoost models for {len(fingerprint_cols)} fingerprint combinations...")
+    
+    # Extract target variable
+    if target_name not in train_df.columns or target_name not in test_df.columns:
+        print(f"Error: {target_name} column not found in dataframes.")
+        return {}, {}
+    
+    y_train = train_df[target_name].values
+    y_test = test_df[target_name].values
+    
+    results = {}
+    best_model = None
+    best_accuracy = float("inf")
+    best_fp_col = None
+    best_X_train = None
+    best_X_test = None
+    best_y_train = None
+    best_y_test = None
+    
+    for fp_col in sorted(fingerprint_cols):
+        print(f"\n  Training model for {fp_col}...")
+        
+        # Extract fingerprints and convert to numpy arrays
+        X_train_list = []
+        X_test_list = []
+        train_indices = []
+        test_indices = []
+        
+        # Process training data
+        for idx, row in train_df.iterrows():
+            fp_list = row[fp_col]
+            if fp_list is not None and len(fp_list) > 0:
+                X_train_list.append(np.array(fp_list, dtype=np.float32))
+                train_indices.append(idx)
+        
+        # Process test data
+        for idx, row in test_df.iterrows():
+            fp_list = row[fp_col]
+            if fp_list is not None and len(fp_list) > 0:
+                X_test_list.append(np.array(fp_list, dtype=np.float32))
+                test_indices.append(idx)
+        
+        if len(X_train_list) == 0 or len(X_test_list) == 0:
+            print(f"    Warning: No valid fingerprints found for {fp_col}")
+            results[fp_col] = 0.0
+            continue
+        
+        # Convert to numpy arrays
+        X_train = np.array(X_train_list)
+        X_test = np.array(X_test_list)
+        y_train_valid = y_train[train_indices]
+        y_test_valid = y_test[test_indices]
+        
+        print(f"    Train samples: {len(X_train)}, Test samples: {len(X_test)}")
+        
+        # Train XGBoost classifier
+        # try:
+        model = xgb.XGBRegressor(
+            n_estimators=100,
+            max_depth=6,
+            learning_rate=0.1,
+            random_state=42,
+            eval_metric='logloss',
+            use_label_encoder=False
+        )
+        
+        model.fit(X_train, y_train_valid)
+        
+        # Predict on test set
+        y_pred = model.predict(X_test)
+        
+        # Calculate accuracy
+        accuracy = mean_squared_error(y_test_valid, y_pred)
+        results[fp_col] = accuracy
+        
+        print(f"    Test accuracy: {accuracy:.4f}")
+        
+        # Track best model
+        if accuracy < best_accuracy:
+            best_accuracy = accuracy
+            best_model = model
+            best_fp_col = fp_col
+            best_X_train = X_train
+            best_X_test = X_test
+            best_y_train = y_train_valid
+            best_y_test = y_test_valid
+            print(f"    * New best model! (accuracy: {accuracy:.4f})")
+            
+        # except Exception as e:
+        #     print(f"    Error training model: {e}")
+        #     results[fp_col] = 0.0
+    
+    # Print results dictionary
+    print(f"\n" + "="*50)
+    print("XGBoost Training Results:")
+    print("="*50)
+    for fp_col, acc in sorted(results.items(), key=lambda x: x[1], reverse=True):
+        print(f"  {fp_col}: {acc:.4f}")
+    
+    # Create bar plot
+    if len(results) > 0:
+        fig, ax = plt.subplots(figsize=(12, 6))
+        
+        # Sort by accuracy for better visualization
+        sorted_results = sorted(results.items(), key=lambda x: x[1], reverse=True)
+        fp_names = [name.replace('morgan_', '') for name, _ in sorted_results]
+        accuracies = [acc for _, acc in sorted_results]
+        
+        bars = ax.bar(range(len(fp_names)), accuracies, color='steelblue', alpha=0.7)
+        ax.set_xlabel('Fingerprint Configuration', fontsize=12)
+        ax.set_ylabel('Test Accuracy', fontsize=12)
+        ax.set_title('XGBoost Test Accuracy for Different Morgan Fingerprint Configurations', 
+                     fontsize=14, fontweight='bold')
+        ax.set_xticks(range(len(fp_names)))
+        ax.set_xticklabels(fp_names, rotation=45, ha='right')
+        ax.set_ylim([0, 1])
+        ax.grid(axis='y', alpha=0.3)
+        
+        # Add value labels on bars
+        for bar, acc in zip(bars, accuracies):
+            height = bar.get_height()
+            ax.text(bar.get_x() + bar.get_width()/2., height,
+                   f'{acc:.3f}',
+                   ha='center', va='bottom', fontsize=9)
+        
+        plt.tight_layout()
+        plt.show()
+    
+    # Prepare best model info
+    best_model_info = {}
+    if best_model is not None:
+        best_model_info = {
+            'model': best_model,
+            'fingerprint_col': best_fp_col,
+            'accuracy': best_accuracy,
+            'X_train': best_X_train,
+            'X_test': best_X_test,
+            'y_train': best_y_train,
+            'y_test': best_y_test
+        }
+        print(f"\n" + "="*50)
+        print(f"Best Model Summary:")
+        print(f"  Fingerprint: {best_fp_col}")
+        print(f"  Test Accuracy: {best_accuracy:.4f}")
+        print(f"  Model saved for further evaluation.")
+        print("="*50)
+    else:
+        print("\nWarning: No valid model was trained.")
+    
+    return results, best_model_info
+
+# Train XGBoost models
+print("Training XGBoost models...")
+xgboost_results, best_model_info = train_xgboost_models(fdf.loc[fdf.split == "train"], fdf.loc[fdf.split == "train"], "Y")
+
+print(f"\nFinal results dictionary:")
+print(xgboost_results)
+
+if best_model_info:
+    print(f"\nBest model available for further evaluation:")
+    print(f"  Fingerprint: {best_model_info['fingerprint_col']}")
+    print(f"  Accuracy: {best_model_info['accuracy']:.4f}")
+    print(f"  Model object: {type(best_model_info['model']).__name__}")

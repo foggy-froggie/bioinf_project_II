@@ -532,6 +532,21 @@ root_mean_squared_error(y_test, model.predict(X_test)),
 root_mean_squared_error(y_valid, model.predict(X_valid)))
 
 # %%
+plt.scatter(y_train, model.predict(X_train), s=2, alpha=0.5, label="train")
+plt.scatter(y_valid, model.predict(X_valid), s=2, alpha=0.5, label="valid")
+plt.scatter(y_test, model.predict(X_test), s=2, alpha=0.5, label="test")
+xrange = [np.min([np.min(y_train), np.min(y_valid), np.min(y_test)]), np.max([np.max(y_train), np.max(y_valid), np.max(y_test)])]
+plt.plot(xrange, xrange, label="identity")
+plt.xlabel("true")
+plt.ylabel("predicted")
+plt.legend()
+# %% [markdown]
+# We can see a strong correlation between true and predicted values in all 3 datasets.
+# The deviation from identity function isn't small, but it's not too bad.
+# Most points are contained inside a dense band aroud identity, its width doesn't exceed about 15% of the data range.
+# We can see that the model doesn't correctly predict the lowest extremes - it seems like it limits its outputs to around -8, which contains the majority of the data points, but excludes some outliers which should go all the way to -12, but are clamped by the model to -8.
+
+# %%
 def train_xgboost_models(train_df, test_df, target_name):
     """
     Trains XGBoost models using all 9 Morgan fingerprint combinations.

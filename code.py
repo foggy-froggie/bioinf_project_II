@@ -20,7 +20,8 @@ import numpy as np
 from matplotlib import pyplot as plt
 import seaborn as sns
 import xgboost as xgb
-from sklearn.metrics import root_mean_squared_error
+from sklearn.metrics import root_mean_squared_error, mean_squared_error
+from scipy.stats import spearmanr
 
 # %%
 # 1. Data retrieval
@@ -31,7 +32,6 @@ df = data.get_data()
 # 2. Create random split
 def assign_split(df, col_name, split):
     df = df.set_index("Drug_ID")
-    split = data.get_split(method="random")
     for key in split.keys():
         index = split[key]["Drug_ID"]
         # for some reason there are two keys which are missing in the filtered dataframe after drop_na lol
@@ -173,31 +173,31 @@ def assign_morgan_fingerprints(df):
 
 # Assign fingerprints
 print("Assigning Morgan fingerprints...")
-fingerprint_df = assign_morgan_fingerprints(df)
+fdf = assign_morgan_fingerprints(df)
 
-print(f"\nFingerprint dataframe shape: {fingerprint_df.shape}")
-print(f"Fingerprint dataframe columns: {fingerprint_df.columns.tolist()}")
+print(f"\nFingerprint dataframe shape: {fdf.shape}")
+print(f"Fingerprint dataframe columns: {fdf.columns.tolist()}")
 print(f"\nFirst few rows (showing non-fingerprint columns):")
 # Display without the mol and fingerprint columns
-display_cols = [col for col in fingerprint_df.columns 
+display_cols = [col for col in fdf.columns 
                if col != 'mol' and not col.startswith('morgan_')]
-fingerprint_df[display_cols].head()
+fdf[display_cols].head()
 
 # %%
 reducer = umap.UMAP()
 column_name = f'morgan_r{2}_l{512}'
-features = np.array(list(fingerprint_df[column_name]))
+features = np.array(list(fdf[column_name]))
 embedding = reducer.fit_transform(features)
 embedding.shape
-fingerprint_df["embedding_x"] = embedding[:, 0]
-fingerprint_df["embedding_y"] = embedding[:, 1]
+fdf["embedding_x"] = embedding[:, 0]
+fdf["embedding_y"] = embedding[:, 1]
 
 # %%
 sns.set()
 
 # %%
 ax = sns.scatterplot(
-    data=fingerprint_df,
+    data=fdf,
     x="embedding_x",
     y="embedding_y",
     hue="Y",
@@ -217,7 +217,7 @@ ax.figure.colorbar(sm, label="Y", ax=ax)
 
 # %%
 sns.scatterplot(
-    data=fingerprint_df,
+    data=fdf,
     x="embedding_x",
     y="embedding_y",
     hue="split_random",
@@ -229,35 +229,75 @@ sns.scatterplot(
 # This isn't good for training, we need a different split method to separate train and test datasets.
 
 # %%
-fdf = fingerprint_df
+def calculate_similarities(df, split_col, fingerprint_col):
+    keys = ["train", "valid", "test"]
+    fingerprints = {}
+    for key in keys:
+        fingerprints[key] = df.loc[df[split_col] == key, fingerprint_col].to_list()
+    
+    key_pairs = [*((a, a) for a in keys), *((a, b) for i, a in enumerate(keys) for b in keys[i+1:])]
+    similarities = {}
+    for a, b in key_pairs:
+        similarities[f"{a}_{b}"] = np.array([BulkTanimotoSimilarity(e, fingerprints[a]) for e in fingerprints[b]])
+        # similarities[f"{b}_{a}"] = similarities[f"{a}_{b}"]
+    return similarities
 
+similarities = calculate_similarities(fdf, "split_random", column_name)
 # %%
-train = fdf.loc[fdf["split_random"] == "train", column_name].to_list()
-test = fdf.loc[fdf["split_random"] == "test", column_name].to_list()
-train_train_similarity = np.array([BulkTanimotoSimilarity(e, train) for e in train])
-train_test_similarity = np.array([BulkTanimotoSimilarity(e, test) for e in train])
-test_test_similarity = np.array([BulkTanimotoSimilarity(e, test) for e in test])
-
-# %%
-plt.hist(train_test_similarity.max(axis=0))
+plt.hist(similarities["train_test"].max(axis=0))
 # %% [markdown]
-# We can see there's a lot of high similarity values and there's not much difference between intra- and inter-dataset similarity distributions.
+# We can see there's a lot of high maximum similarity values between train and test dataset,
+# which means there's quite a bit of very similar molecules in the two datasets.
 # That's bad. We need a better split.
 
 # %%
 # line histogram insted of KDE plot, because KDE is very slow for this large data set
-def plot_hist(data, bins=20, range=(0, 1), density=True, **kwargs):
-    hist, bin_edges = np.histogram(data, bins=bins, range=range, density=density, **kwargs)
+def plot_hist(data, bins=20, range=(-5, 0), density=True, **kwargs):
+    hist, bin_edges = np.histogram(np.log(data), bins=bins, range=range, density=density)
     bin_centers = (bin_edges[1:] + bin_edges[:-1]) / 2
-    plt.plot(bin_centers, hist)
-plot_hist(train_train_similarity)
-plot_hist(train_test_similarity)
-plot_hist(test_test_similarity)
+    plt.plot(bin_centers, hist, **kwargs)
+for key in similarities:
+    plot_hist(similarities[key], label=key)
+plt.legend()
+
 # %% [markdown]
 # This is even worse.
-# Density plots/histograms of train-train, train-test and test-test similarities are identical.
-# This means the data in train and test datasets is basically identically distributed and the test dataset doesn't represent any genuinely new chemistry.
+# Density plots/histograms of inter- and intra-dataset similarities are identical.
+# This means the data in train, valid and test datasets is basically identically distributed and the test dataset doesn't represent any genuinely new chemistry.
 # We need a better split.
+
+# %%
+sns.scatterplot(
+    data=fdf,
+    x="embedding_x",
+    y="embedding_y",
+    hue="split_scaffold",
+    s=5,
+    alpha=1,
+)
+# %% [markdown]
+# With scaffold split, we see more clearly separable datasets.
+# They are still mixed, but we can separate larger regions of specific colors, not only individual randomly mixed points.
+
+#%%
+similarities = calculate_similarities(fdf, "split_scaffold", column_name)
+# %%
+plt.hist(similarities["train_test"].max(axis=0))
+# %% [markdown]
+# We can see a lot less high similarity values between train and test datasets.
+# Better than random split.
+
+# %%
+# line histogram insted of KDE plot, because KDE is very slow for this large data set
+for key in similarities:
+    plot_hist(similarities[key], label=key)
+plt.legend()
+# %% [markdown]
+# Inter- and intra-dataset similarity score distributions are still similar, but at least they aren't identical.
+# We can also see that the 3 distributions involving the train dataset are the most spread out.
+# That would make some sense, because the train dataset is significantly larger (70%) than valid (10%) and test (20%).
+#
+# Anyway, the scaffold split is definitely better than random. Still not ideal, but better.
 
 # %%
 # choose the better split to be used in downstream code
@@ -566,17 +606,17 @@ model = xgb.XGBRegressor(
 model = xgb.XGBRegressor(
     n_estimators=1000,        # large, but use early stopping
     learning_rate=0.03,      # small = safer generalization
-    max_depth=10,             # shallow trees reduce overfitting
+    max_depth=6,             # shallow trees reduce overfitting
     min_child_weight=5,      # prevents tiny leaf splits
     subsample=0.7,           # row sampling
-    colsample_bytree=0.8,    # VERY important for high-dim data
+    colsample_bytree=0.3,    # VERY important for high-dim data
     reg_alpha=1.0,           # L1 regularization (feature selection)
     reg_lambda=5.0,          # L2 regularization
     gamma=1.0,               # require meaningful splits
     objective='reg:squarederror',
     tree_method='hist',      # faster + good default
     random_state=42,
-    early_stopping_rounds=10,
+    early_stopping_rounds=20,
 )
 
 # %%
@@ -595,199 +635,33 @@ accuracy = root_mean_squared_error(y_test, y_pred)
 accuracy
 
 # %%
-(root_mean_squared_error(y_train, model.predict(X_train)),
-root_mean_squared_error(y_test, model.predict(X_test)),
-root_mean_squared_error(y_valid, model.predict(X_valid)))
+def evaluate_model(X, y_true, name):
+    y_pred = model.predict(X)
+    rmse = root_mean_squared_error(y_true, y_pred)
+    spearman_rho, _ = spearmanr(y_true, y_pred)
+    print(f"{name} Set -> RMSE: {rmse}, Spearman Rho: {spearman_rho}")
+    return rmse, spearman_rho
+
+results = {
+    "Train": evaluate_model(X_train, y_train, "Train"),
+    "Valid": evaluate_model(X_valid, y_valid, "Valid"),
+    "Test":  evaluate_model(X_test, y_test, "Test")
+}
+# %% [markdown]
+# We established a baseline model for predicting aqueous solubility using XGBoost Regression and Morgan Fingerprints. Our final Test RMSE of 1.053 demonstrates a clear predictive trend, particularly when compared to the dataset's standard deviation of 2.37 and the inherent experimental noise in AqSolDB. While advanced architectures like Graph Neural Networks could potentially refine these results, this model effectively captures the primary variance driven by fundamental descriptors like LogP and Molecular Weight while remaining computationally efficient.
 
 # %%
-def train_xgboost_models(train_df, test_df, target_name):
-    """
-    Trains XGBoost models using all 9 Morgan fingerprint combinations.
-    Calculates accuracy on test set for each model and keeps the best model.
-    
-    Args:
-        train_df (pd.DataFrame): Training dataframe with fingerprint columns
-        test_df (pd.DataFrame): Test dataframe with fingerprint columns
-        
-    Returns:
-        tuple: (results_dict, best_model_info) where:
-            - results_dict: Dictionary with fingerprint names as keys and accuracies as values
-            - best_model_info: Dictionary with 'model', 'fingerprint_col', 'accuracy', 
-                             'X_train', 'X_test', 'y_train', 'y_test' for the best model
-    """
-    if len(train_df) == 0 or len(test_df) == 0:
-        print("Error: Train or test dataframes are empty.")
-        return {}, {}
-    
-    # Get all Morgan fingerprint columns
-    fingerprint_cols = [col for col in train_df.columns if col.startswith('morgan_')]
-    
-    if len(fingerprint_cols) == 0:
-        print("Error: No Morgan fingerprint columns found.")
-        return {}, {}
-    
-    print(f"\nTraining XGBoost models for {len(fingerprint_cols)} fingerprint combinations...")
-    
-    # Extract target variable
-    if target_name not in train_df.columns or target_name not in test_df.columns:
-        print(f"Error: {target_name} column not found in dataframes.")
-        return {}, {}
-    
-    y_train = train_df[target_name].values
-    y_test = test_df[target_name].values
-    
-    results = {}
-    best_model = None
-    best_accuracy = float("inf")
-    best_fp_col = None
-    best_X_train = None
-    best_X_test = None
-    best_y_train = None
-    best_y_test = None
-    
-    for fp_col in sorted(fingerprint_cols):
-        print(f"\n  Training model for {fp_col}...")
-        
-        # Extract fingerprints and convert to numpy arrays
-        X_train_list = []
-        X_test_list = []
-        train_indices = []
-        test_indices = []
-        
-        # Process training data
-        for idx, row in train_df.iterrows():
-            fp_list = row[fp_col]
-            if fp_list is not None and len(fp_list) > 0:
-                X_train_list.append(np.array(fp_list, dtype=np.float32))
-                train_indices.append(idx)
-        
-        # Process test data
-        for idx, row in test_df.iterrows():
-            fp_list = row[fp_col]
-            if fp_list is not None and len(fp_list) > 0:
-                X_test_list.append(np.array(fp_list, dtype=np.float32))
-                test_indices.append(idx)
-        
-        if len(X_train_list) == 0 or len(X_test_list) == 0:
-            print(f"    Warning: No valid fingerprints found for {fp_col}")
-            results[fp_col] = 0.0
-            continue
-        
-        # Convert to numpy arrays
-        X_train = np.array(X_train_list)
-        X_test = np.array(X_test_list)
-        y_train_valid = y_train[train_indices]
-        y_test_valid = y_test[test_indices]
-        
-        print(f"    Train samples: {len(X_train)}, Test samples: {len(X_test)}")
-        
-        # Train XGBoost classifier
-        # try:
-        model = xgb.XGBRegressor(
-            n_estimators=100,
-            max_depth=6,
-            learning_rate=0.1,
-            random_state=42,
-            eval_metric='logloss',
-            use_label_encoder=False
-        )
-        
-        model.fit(X_train, y_train_valid)
-        
-        # Predict on test set
-        y_pred = model.predict(X_test)
-        
-        # Calculate accuracy
-        accuracy = mean_squared_error(y_test_valid, y_pred)
-        results[fp_col] = accuracy
-        
-        print(f"    Test accuracy: {accuracy:.4f}")
-        
-        # Track best model
-        if accuracy < best_accuracy:
-            best_accuracy = accuracy
-            best_model = model
-            best_fp_col = fp_col
-            best_X_train = X_train
-            best_X_test = X_test
-            best_y_train = y_train_valid
-            best_y_test = y_test_valid
-            print(f"    * New best model! (accuracy: {accuracy:.4f})")
-            
-        # except Exception as e:
-        #     print(f"    Error training model: {e}")
-        #     results[fp_col] = 0.0
-    
-    # Print results dictionary
-    print(f"\n" + "="*50)
-    print("XGBoost Training Results:")
-    print("="*50)
-    for fp_col, acc in sorted(results.items(), key=lambda x: x[1], reverse=True):
-        print(f"  {fp_col}: {acc:.4f}")
-    
-    # Create bar plot
-    if len(results) > 0:
-        fig, ax = plt.subplots(figsize=(12, 6))
-        
-        # Sort by accuracy for better visualization
-        sorted_results = sorted(results.items(), key=lambda x: x[1], reverse=True)
-        fp_names = [name.replace('morgan_', '') for name, _ in sorted_results]
-        accuracies = [acc for _, acc in sorted_results]
-        
-        bars = ax.bar(range(len(fp_names)), accuracies, color='steelblue', alpha=0.7)
-        ax.set_xlabel('Fingerprint Configuration', fontsize=12)
-        ax.set_ylabel('Test Accuracy', fontsize=12)
-        ax.set_title('XGBoost Test Accuracy for Different Morgan Fingerprint Configurations', 
-                     fontsize=14, fontweight='bold')
-        ax.set_xticks(range(len(fp_names)))
-        ax.set_xticklabels(fp_names, rotation=45, ha='right')
-        ax.set_ylim([0, 1])
-        ax.grid(axis='y', alpha=0.3)
-        
-        # Add value labels on bars
-        for bar, acc in zip(bars, accuracies):
-            height = bar.get_height()
-            ax.text(bar.get_x() + bar.get_width()/2., height,
-                   f'{acc:.3f}',
-                   ha='center', va='bottom', fontsize=9)
-        
-        plt.tight_layout()
-        plt.show()
-    
-    # Prepare best model info
-    best_model_info = {}
-    if best_model is not None:
-        best_model_info = {
-            'model': best_model,
-            'fingerprint_col': best_fp_col,
-            'accuracy': best_accuracy,
-            'X_train': best_X_train,
-            'X_test': best_X_test,
-            'y_train': best_y_train,
-            'y_test': best_y_test
-        }
-        print(f"\n" + "="*50)
-        print(f"Best Model Summary:")
-        print(f"  Fingerprint: {best_fp_col}")
-        print(f"  Test Accuracy: {best_accuracy:.4f}")
-        print(f"  Model saved for further evaluation.")
-        print("="*50)
-    else:
-        print("\nWarning: No valid model was trained.")
-    
-    return results, best_model_info
-
-# Train XGBoost models
-print("Training XGBoost models...")
-xgboost_results, best_model_info = train_xgboost_models(fdf.loc[fdf.split == "train"], fdf.loc[fdf.split == "train"], "Y")
-
-print(f"\nFinal results dictionary:")
-print(xgboost_results)
-
-if best_model_info:
-    print(f"\nBest model available for further evaluation:")
-    print(f"  Fingerprint: {best_model_info['fingerprint_col']}")
-    print(f"  Accuracy: {best_model_info['accuracy']:.4f}")
-    print(f"  Model object: {type(best_model_info['model']).__name__}")
-
+plt.scatter(y_train, model.predict(X_train), s=2, alpha=0.5, label="train")
+plt.scatter(y_valid, model.predict(X_valid), s=2, alpha=0.5, label="valid")
+plt.scatter(y_test, model.predict(X_test), s=2, alpha=0.5, label="test")
+xrange = [np.min([np.min(y_train), np.min(y_valid), np.min(y_test)]), np.max([np.max(y_train), np.max(y_valid), np.max(y_test)])]
+plt.plot(xrange, xrange, label="identity")
+plt.xlabel("true")
+plt.ylabel("predicted")
+plt.legend()
+# %% [markdown]
+# We can see a strong correlation between true and predicted values in all 3 datasets.
+# The deviation from identity function isn't small, but it's not too bad.
+# Most points are contained inside a dense band aroud identity, its width doesn't exceed about 15% of the data range.
+# We can see that the model doesn't correctly predict the lowest extremes - it seems like it limits its outputs to around -8, which contains the majority of the data points, but excludes some outliers which should go all the way to -12, but are clamped by the model to -8.
 # %%

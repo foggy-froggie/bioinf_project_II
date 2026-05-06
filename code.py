@@ -1,7 +1,9 @@
 # %% [markdown]
-# https://tdcommons.ai/single_pred_tasks/adme/#solubility-aqsoldb
-# Aqeuous solubility measures a drug's ability to dissolve in water. Poor water solubility could lead to slow drug absorptions, inadequate bioavailablity and even induce toxicity. More than 40% of new chemical entities are not soluble. 
-
+# Source: https://tdcommons.ai/single_pred_tasks/adme/#solubility-aqsoldb
+# <br>
+# **Aqueous solubility** ($log\ mol/L$) is a property that dictates how a drug is absorbed, its bioavailability, and its potential toxicity.  
+# <br>
+# The AqSolDB dataset is a collection of aqueous solubility data for 9,980 unique chemical compounds. 
 # %% TASK 1
 import pandas as pd
 from tdc.single_pred import ADME
@@ -46,6 +48,14 @@ summary_table = df[['Y', 'MolWt', 'LogP', 'NumHDonors', 'NumHAcceptors']].descri
 
 print("--- Summary Table ---")
 print(summary_table)
+# %% [markdown]
+# ### Table analysis
+# - Solubility ($Y$): With a mean of -2.89 and a range spanning from -13.17 to 2.14, the dataset covers a massive spectrum of solubility. The standard deviation of 2.37 indicates high variability, which is ideal for training a machine learning model.  
+# <br>
+# - Molecular Weight (MolWt): The average weight is 266.69 g/mol, which is typical for "small molecule" drugs. However, the maximum value of 5,299 g/mol shows the inclusion of very large, complex structures.
+# - LogP (Lipophilicity): The mean LogP of 1.98 suggests that the average molecule in the set is slightly hydrophobic (prefers oil over water). The extreme range (-40.87 to 68.54) reflects an incredibly diverse set of chemical behaviors.  
+# - Hydrogen Bond Descriptors: The molecules have an average of 1.11 donors and 3.41 acceptors. These features are critical for solubility because they dictate how well a molecule can bond with water molecules to dissolve
+
 # %% TASK 2
 # 1. Generate InChIKey for each molecule
 df['InChIKey'] = df['mol'].apply(lambda x: Chem.MolToInchiKey(x))

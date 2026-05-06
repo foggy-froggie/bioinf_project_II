@@ -375,6 +375,28 @@ print(target_correlations)
 # - **H-Bond Donors/Acceptors**: Solubility in water is heavily driven by a molecule's ability to form hydrogen bonds with water molecules.
 
 # %%
+def prepare_X(df, feature_cols, fingerprint_col):
+    features = df.loc[:, feature_cols].to_numpy()
+    fingerprints = np.array(list(df[fingerprint_col]))
+    return np.hstack([features, fingerprints])
+
+def prepare_dataset(df):
+    X = prepare_X(df, ["MolWt", "LogP", "NumHDonors"], [col for col in df.columns if col.startswith('morgan_')][0])
+    y = df.Y.to_numpy()
+    train_idx = df.split == "train"
+    test_idx = df.split == "test"
+    valid_idx = df.split == "valid"
+    X_train = X[train_idx]
+    y_train = y[train_idx]
+    X_test = X[test_idx]
+    y_test = y[test_idx]
+    X_valid = X[valid_idx]
+    y_valid = y[valid_idx]
+    return X_train, y_train, X_test, y_test, X_valid, y_valid
+
+prepare_dataset(fdf)
+
+# %%
 def train_xgboost_models(train_df, test_df, target_name):
     """
     Trains XGBoost models using all 9 Morgan fingerprint combinations.
@@ -564,3 +586,5 @@ if best_model_info:
     print(f"  Fingerprint: {best_model_info['fingerprint_col']}")
     print(f"  Accuracy: {best_model_info['accuracy']:.4f}")
     print(f"  Model object: {type(best_model_info['model']).__name__}")
+
+# %%

@@ -293,7 +293,7 @@ print("--- Task 5.1 Summary Table ---")
 print(task5_summary_table)
 
 
-task5_summary_by_split = df_5.groupby('split')[task5_descriptors].describe()
+task5_summary_by_split = df_5.groupby('split')[task5_desc].describe()
 
 print("--- Task 5.1 Summary Table by Split ---")
 print(task5_summary_by_split)

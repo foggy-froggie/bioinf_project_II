@@ -26,11 +26,13 @@ def merge_split(split):
     return pd.concat([train, test, valid])
 
 # df = merge_split(data.get_split())
-df = merge_split(create_scaffold_split(df, seed=42, frac=[0.7, 0.1, 0.2], entity=data.entity1_name))
+df = data.get_data()
 
 # 2. Conversion SMILES → Molecule Objects
 df['mol'] = df['Drug'].apply(lambda x: Chem.MolFromSmiles(x))
 df = df.dropna(subset=['mol']).reset_index(drop=True)
+
+df = merge_split(create_scaffold_split(df, seed=42, frac=[0.7, 0.1, 0.2], entity=data.entity1_name))
 
 # 3. Basic desctiptors
 df['MolWt'] = df['mol'].apply(Descriptors.MolWt)          # Molecular Weight - sum of the atomic weights of all atoms in a molecule

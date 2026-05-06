@@ -21,6 +21,7 @@ from matplotlib import pyplot as plt
 import seaborn as sns
 import xgboost as xgb
 from sklearn.metrics import root_mean_squared_error, mean_squared_error
+from scipy.stats import spearmanr
 
 # %%
 # 1. Data retrieval
@@ -527,6 +528,20 @@ accuracy = root_mean_squared_error(y_test, y_pred)
 accuracy
 
 # %%
+def evaluate_model(X, y_true, name):
+    y_pred = model.predict(X)
+    rmse = root_mean_squared_error(y_true, y_pred)
+    spearman_rho, _ = spearmanr(y_true, y_pred)
+    print(f"{name} Set -> RMSE: {rmse}, Spearman Rho: {spearman_rho}")
+    return rmse, spearman_rho
+
+results = {
+    "Train": evaluate_model(X_train, y_train, "Train"),
+    "Valid": evaluate_model(X_valid, y_valid, "Valid"),
+    "Test":  evaluate_model(X_test, y_test, "Test")
+}
+# %% [markdown]
+# We established a baseline model for predicting aqueous solubility using XGBoost Regression and Morgan Fingerprints. Our final Test RMSE of 1.053 demonstrates a clear predictive trend, particularly when compared to the dataset's standard deviation of 2.37 and the inherent experimental noise in AqSolDB. While advanced architectures like Graph Neural Networks could potentially refine these results, this model effectively captures the primary variance driven by fundamental descriptors like LogP and Molecular Weight while remaining computationally efficient.
 (root_mean_squared_error(y_train, model.predict(X_train)),
 root_mean_squared_error(y_test, model.predict(X_test)),
 root_mean_squared_error(y_valid, model.predict(X_valid)))

@@ -20,7 +20,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 import seaborn as sns
 import xgboost as xgb
-from sklearn.metrics import root_mean_squared_error
+from sklearn.metrics import root_mean_squared_error, mean_squared_error
 
 # %%
 # 1. Data retrieval
@@ -711,7 +711,11 @@ def train_xgboost_models(train_df, test_df, target_name):
 
 # Train XGBoost models
 print("Training XGBoost models...")
-xgboost_results, best_model_info = train_xgboost_models(fdf.loc[fdf.split == "train"], fdf.loc[fdf.split == "test"], "Y")
+xgboost_results, best_model_info = train_xgboost_models(
+    fdf.loc[fdf.split == "train"].reset_index(drop=True),
+    fdf.loc[fdf.split == "test"].reset_index(drop=True),
+    "Y",
+)
 
 print(f"\nFinal results dictionary:")
 print(xgboost_results)

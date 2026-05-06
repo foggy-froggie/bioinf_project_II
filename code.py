@@ -4,6 +4,10 @@
 # **Aqueous solubility** ($log\ mol/L$) is a property that dictates how a drug is absorbed, its bioavailability, and its potential toxicity.  
 # <br>
 # The AqSolDB dataset is a collection of aqueous solubility data for 9,980 unique chemical compounds. 
+# The dataset contains:
+# - Drug_ID
+# - SMILES Strings: 2D chemical structures of the molecules.
+# - Target ($Y$): Experimental solubility values measured on a logarithmic scale ($log\ mol/L$).
 # %% TASK 1
 import pandas as pd
 from tdc.single_pred import ADME

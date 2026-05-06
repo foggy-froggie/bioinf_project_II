@@ -23,26 +23,38 @@ import xgboost as xgb
 from sklearn.metrics import root_mean_squared_error
 
 # %%
-# 1. Data retrival
+# 1. Data retrieval
 data = ADME(name = 'Solubility_AqSolDB')
-
-def merge_split(split):
-    train, test, valid = split["train"], split["test"], split["valid"]
-    train["split"] = "train"
-    test["split"] = "test"
-    valid["split"] = "valid"
-    return pd.concat([train, test, valid])
-
-# df = merge_split(data.get_split())
 df = data.get_data()
 
-# 2. Conversion SMILES → Molecule Objects
+# %%
+# 2. Create random split
+def assign_split(df, col_name, split):
+    df = df.set_index("Drug_ID")
+    split = data.get_split(method="random")
+    for key in split.keys():
+        index = split[key]["Drug_ID"]
+        # for some reason there are two keys which are missing in the filtered dataframe after drop_na lol
+        index = index[(index != '3-methyl-n-oxidepyridine') & (index != 'n-oxidenicotinic acid')]
+        df.loc[index, col_name] = key
+    return df.reset_index()
+
+df = assign_split(df, "split_random", data.get_split(method="random"))
+
+# %%
+# 3. Conversion SMILES → Molecule Objects
 df['mol'] = df['Drug'].apply(lambda x: Chem.MolFromSmiles(x))
+
+# 4. Remove missing data
 df = df.dropna(subset=['mol']).reset_index(drop=True)
 
-df = merge_split(create_scaffold_split(df, seed=42, frac=[0.7, 0.1, 0.2], entity=data.entity1_name))
+# %%
+# 5. Only after removing missing data, we can create a scaffold split.
+# Calling `data.get_split(method="scaffold")` directly results in an internal package error...
+df = assign_split(df, "split_scaffold", create_scaffold_split(df, seed=42, frac=[0.7, 0.1, 0.2], entity=data.entity1_name))
 
-# 3. Basic desctiptors
+# %%
+# 6. Basic descriptors
 df['MolWt'] = df['mol'].apply(Descriptors.MolWt)          # Molecular Weight - sum of the atomic weights of all atoms in a molecule
 df['LogP'] = df['mol'].apply(Descriptors.MolLogP)         # Octanol-Water Partition Coefficient - A measure of a molecule's lipophilicity
 df['NumHDonors'] = df['mol'].apply(Descriptors.NumHDonors) # Number of Hydrogen Bond Donors - amount of hydrogen atoms attached to an electronegative atom (like Nitrogen or Oxygen) that can be "donated" to form a hydrogen bond.
@@ -208,7 +220,7 @@ sns.scatterplot(
     data=fingerprint_df,
     x="embedding_x",
     y="embedding_y",
-    hue="split",
+    hue="split_random",
     s=5,
     alpha=1,
 )
@@ -220,8 +232,8 @@ sns.scatterplot(
 fdf = fingerprint_df
 
 # %%
-train = fdf.loc[fdf["split"] == "train", column_name].to_list()
-test = fdf.loc[fdf["split"] == "test", column_name].to_list()
+train = fdf.loc[fdf["split_random"] == "train", column_name].to_list()
+test = fdf.loc[fdf["split_random"] == "test", column_name].to_list()
 train_train_similarity = np.array([BulkTanimotoSimilarity(e, train) for e in train])
 train_test_similarity = np.array([BulkTanimotoSimilarity(e, test) for e in train])
 test_test_similarity = np.array([BulkTanimotoSimilarity(e, test) for e in test])
@@ -246,6 +258,10 @@ plot_hist(test_test_similarity)
 # Density plots/histograms of train-train, train-test and test-test similarities are identical.
 # This means the data in train and test datasets is basically identically distributed and the test dataset doesn't represent any genuinely new chemistry.
 # We need a better split.
+
+# %%
+# choose the better split to be used in downstream code
+fdf["split"] = fdf["split_scaffold"]
 
 # %% task 5
 df_5 = fdf.copy()

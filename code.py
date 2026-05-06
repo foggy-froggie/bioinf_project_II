@@ -228,4 +228,126 @@ plot_hist(test_test_similarity)
 # This means the data in train and test datasets is basically identically distributed and the test dataset doesn't represent any genuinely new chemistry.
 # We need a better split.
 
+# %% task 5
+df_5 = df.copy()
+
+# %% TASK 5
+# Dataset Diversity and Structure–Activity Relationships
+
+# We make a copy of the main DataFrame so that Task 5 does not modify the original df directly.
+df_5 = df.copy()
+
+
+# %% TASK 5.1
+# Dataset Diversity Analysis
+
+# Additional descriptors required for Task 5
+df_5['HeavyAtomCount'] = df_5['mol'].apply(Descriptors.HeavyAtomCount)
+df_5['RingCount'] = df_5['mol'].apply(Descriptors.RingCount)
+df_5['NumRotatableBonds'] = df_5['mol'].apply(Descriptors.NumRotatableBonds)
+
+# ALOGP / LogP descriptor
+# LogP was already calculated in Task 1 using RDKit MolLogP,
+# so we reuse it here as ALOGP-like descriptor.
+df_5['ALOGP'] = df_5['LogP']
+
+# List of descriptors required for Task 5.1
+task5_descriptors = [
+    'MolWt',
+    'HeavyAtomCount',
+    'RingCount',
+    'NumRotatableBonds',
+    'ALOGP'
+]
+
+# Summary statistics for the whole dataset
+task5_summary_table = df_5[task5_descriptors].describe()
+
+print("--- Task 5.1 Summary Table ---")
+print(task5_summary_table)
+
+# Summary statistics grouped by train/test/valid split
+task5_summary_by_split = df_5.groupby('split')[task5_descriptors].describe()
+
+print("--- Task 5.1 Summary Table by Split ---")
+print(task5_summary_by_split)
+
+
+# Histograms / density plots for each descriptor across train/test/valid
+
+for descriptor in task5_descriptors:
+    plt.figure(figsize=(8, 5))
+    
+    sns.histplot(
+        data=df_5,
+        x=descriptor,
+        hue='split',
+        kde=True,
+        stat='density',
+        common_norm=False,
+        element='step'
+    )
+    
+    plt.title(f'Distribution of {descriptor} across train/test/valid')
+    plt.xlabel(descriptor)
+    plt.ylabel('Density')
+    plt.tight_layout()
+    plt.show()
+
+
+# Optional: boxplots to compare descriptor distributions across splits
+
+for descriptor in task5_descriptors:
+    plt.figure(figsize=(7, 5))
+    
+    sns.boxplot(
+        data=df_5,
+        x='split',
+        y=descriptor
+    )
+    
+    plt.title(f'{descriptor} by split')
+    plt.xlabel('Split')
+    plt.ylabel(descriptor)
+    plt.tight_layout()
+    plt.show()
+
+
+# %% TASK 5.2
+# Structure–Activity Relationships
+
+# We include the descriptors and the target value Y.
+correlation_columns = task5_descriptors + ['Y']
+
+# Spearman correlation is used because it captures monotonic relationships,
+# not only strictly linear relationships.
+correlation_matrix = df_5[correlation_columns].corr(method='spearman')
+
+print("--- Task 5.2 Spearman Correlation Matrix ---")
+print(correlation_matrix)
+
+# Heatmap of the correlation matrix
+plt.figure(figsize=(8, 6))
+
+sns.heatmap(
+    correlation_matrix,
+    annot=True,
+    fmt=".2f",
+    cmap="coolwarm",
+    center=0
+)
+
+plt.title("Spearman correlation matrix: descriptors and solubility")
+plt.tight_layout()
+plt.show()
+
+# Correlations between each descriptor and the target value Y
+target_correlations = (
+    correlation_matrix['Y']
+    .drop('Y')
+    .sort_values(key=lambda x: abs(x), ascending=False)
+)
+
+print("--- Task 5.2 Correlations with Y ---")
+print(target_correlations)
 # %%

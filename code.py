@@ -16,7 +16,7 @@ import seaborn as sns
 
 # %%
 # 1. Data retrival
-data = ADME(name = 'Solubilit`y_AqSolDB')
+data = ADME(name = 'Solubility_AqSolDB')
 
 def merge_split(split):
     train, test, valid = split["train"], split["test"], split["valid"]

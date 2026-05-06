@@ -250,8 +250,8 @@ plt.hist(similarities["train_test"].max(axis=0))
 
 # %%
 # line histogram insted of KDE plot, because KDE is very slow for this large data set
-def plot_hist(data, bins=20, range=(0, 1), density=True, **kwargs):
-    hist, bin_edges = np.histogram(data, bins=bins, range=range, density=density)
+def plot_hist(data, bins=20, range=(-5, 0), density=True, **kwargs):
+    hist, bin_edges = np.histogram(np.log(data), bins=bins, range=range, density=density)
     bin_centers = (bin_edges[1:] + bin_edges[:-1]) / 2
     plt.plot(bin_centers, hist, **kwargs)
 for key in similarities:

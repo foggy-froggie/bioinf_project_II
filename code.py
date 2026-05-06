@@ -8,6 +8,7 @@ from tdc.single_pred import ADME
 from rdkit import Chem
 from rdkit.Chem import Descriptors, rdFingerprintGenerator
 from rdkit.DataStructs import BulkTanimotoSimilarity
+from tdc.utils.split import create_scaffold_split
 import umap
 import numpy as np
 from matplotlib import pyplot as plt
@@ -15,17 +16,17 @@ import seaborn as sns
 
 # %%
 # 1. Data retrival
-data = ADME(name = 'Solubilit`y_AqSolDB')
+data = ADME(name = 'Solubility_AqSolDB')
 
-def get_split_data(data):
-    split = data.get_split()
+def merge_split(split):
     train, test, valid = split["train"], split["test"], split["valid"]
     train["split"] = "train"
     test["split"] = "test"
     valid["split"] = "valid"
     return pd.concat([train, test, valid])
 
-df = get_split_data(data)
+# df = merge_split(data.get_split())
+df = merge_split(create_scaffold_split(df, seed=42, frac=[0.7, 0.1, 0.2], entity=data.entity1_name))
 
 # 2. Conversion SMILES → Molecule Objects
 df['mol'] = df['Drug'].apply(lambda x: Chem.MolFromSmiles(x))
@@ -350,4 +351,13 @@ target_correlations = (
 
 print("--- Task 5.2 Correlations with Y ---")
 print(target_correlations)
+
+# %% TASK 6
+# %% [markdown]
+### Selected Features:
+# - Morgan Fingerprints: To capture the local chemical environment of atoms (structure).
+# - LogP: Important for solubility, as it measures lipophilicity.
+# - Molecular Weight (MolWt): Larger molecules often have lower solubility due to crystal lattice energy.
+# - H-Bond Donors/Acceptors: Solubility in water is heavily driven by a molecule's ability to form hydrogen bonds with water molecules.
+
 # %%

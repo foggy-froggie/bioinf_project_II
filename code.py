@@ -173,31 +173,31 @@ def assign_morgan_fingerprints(df):
 
 # Assign fingerprints
 print("Assigning Morgan fingerprints...")
-fingerprint_df = assign_morgan_fingerprints(df)
+fdf = assign_morgan_fingerprints(df)
 
-print(f"\nFingerprint dataframe shape: {fingerprint_df.shape}")
-print(f"Fingerprint dataframe columns: {fingerprint_df.columns.tolist()}")
+print(f"\nFingerprint dataframe shape: {fdf.shape}")
+print(f"Fingerprint dataframe columns: {fdf.columns.tolist()}")
 print(f"\nFirst few rows (showing non-fingerprint columns):")
 # Display without the mol and fingerprint columns
-display_cols = [col for col in fingerprint_df.columns 
+display_cols = [col for col in fdf.columns 
                if col != 'mol' and not col.startswith('morgan_')]
-fingerprint_df[display_cols].head()
+fdf[display_cols].head()
 
 # %%
 reducer = umap.UMAP()
 column_name = f'morgan_r{2}_l{512}'
-features = np.array(list(fingerprint_df[column_name]))
+features = np.array(list(fdf[column_name]))
 embedding = reducer.fit_transform(features)
 embedding.shape
-fingerprint_df["embedding_x"] = embedding[:, 0]
-fingerprint_df["embedding_y"] = embedding[:, 1]
+fdf["embedding_x"] = embedding[:, 0]
+fdf["embedding_y"] = embedding[:, 1]
 
 # %%
 sns.set()
 
 # %%
 ax = sns.scatterplot(
-    data=fingerprint_df,
+    data=fdf,
     x="embedding_x",
     y="embedding_y",
     hue="Y",
@@ -217,7 +217,7 @@ ax.figure.colorbar(sm, label="Y", ax=ax)
 
 # %%
 sns.scatterplot(
-    data=fingerprint_df,
+    data=fdf,
     x="embedding_x",
     y="embedding_y",
     hue="split_random",
@@ -227,9 +227,6 @@ sns.scatterplot(
 # %% [markdown]
 # Datasets are thoroughly mixed, as expected with a random split.
 # This isn't good for training, we need a different split method to separate train and test datasets.
-
-# %%
-fdf = fingerprint_df
 
 # %%
 def calculate_similarities(df, split_col, fingerprint_col):

@@ -229,4 +229,12 @@ plot_hist(test_test_similarity)
 # This means the data in train and test datasets is basically identically distributed and the test dataset doesn't represent any genuinely new chemistry.
 # We need a better split.
 
+# %% TASK 6
+# %% [markdown]
+### Selected Features:
+# - Morgan Fingerprints: To capture the local chemical environment of atoms (structure).
+# - LogP: Important for solubility, as it measures lipophilicity.
+# - Molecular Weight (MolWt): Larger molecules often have lower solubility due to crystal lattice energy.
+# - H-Bond Donors/Acceptors: Solubility in water is heavily driven by a molecule's ability to form hydrogen bonds with water molecules.
+
 # %%

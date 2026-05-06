@@ -31,7 +31,6 @@ df = data.get_data()
 # 2. Create random split
 def assign_split(df, col_name, split):
     df = df.set_index("Drug_ID")
-    split = data.get_split(method="random")
     for key in split.keys():
         index = split[key]["Drug_ID"]
         # for some reason there are two keys which are missing in the filtered dataframe after drop_na lol

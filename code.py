@@ -7,6 +7,7 @@ import pandas as pd
 from tdc.single_pred import ADME
 from rdkit import Chem
 from rdkit.Chem import Descriptors, rdFingerprintGenerator
+from rdkit.DataStructs import BulkTanimotoSimilarity
 import umap
 import numpy as np
 from matplotlib import pyplot as plt
@@ -195,5 +196,36 @@ sns.scatterplot(
 # %% [markdown]
 # Datasets are thoroughly mixed, as expected with a random split.
 # This isn't good for training, we need a different split method to separate train and test datasets.
+
+# %%
+fdf = fingerprint_df
+
+# %%
+train = fdf.loc[fdf["split"] == "train", column_name].to_list()
+test = fdf.loc[fdf["split"] == "test", column_name].to_list()
+train_train_similarity = np.array([BulkTanimotoSimilarity(e, train) for e in train])
+train_test_similarity = np.array([BulkTanimotoSimilarity(e, test) for e in train])
+test_test_similarity = np.array([BulkTanimotoSimilarity(e, test) for e in test])
+
+# %%
+plt.hist(train_test_similarity.max(axis=0))
+# %% [markdown]
+# We can see there's a lot of high similarity values and there's not much difference between intra- and inter-dataset similarity distributions.
+# That's bad. We need a better split.
+
+# %%
+# line histogram insted of KDE plot, because KDE is very slow for this large data set
+def plot_hist(data, bins=20, range=(0, 1), density=True, **kwargs):
+    hist, bin_edges = np.histogram(data, bins=bins, range=range, density=density, **kwargs)
+    bin_centers = (bin_edges[1:] + bin_edges[:-1]) / 2
+    plt.plot(bin_centers, hist)
+plot_hist(train_train_similarity)
+plot_hist(train_test_similarity)
+plot_hist(test_test_similarity)
+# %% [markdown]
+# This is even worse.
+# Density plots/histograms of train-train, train-test and test-test similarities are identical.
+# This means the data in train and test datasets is basically identically distributed and the test dataset doesn't represent any genuinely new chemistry.
+# We need a better split.
 
 # %%

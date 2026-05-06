@@ -15,7 +15,7 @@ import seaborn as sns
 
 # %%
 # 1. Data retrival
-data = ADME(name = 'Solubilit`y_AqSolDB')
+data = ADME(name = 'Solubility_AqSolDB')
 
 def get_split_data(data):
     split = data.get_split()

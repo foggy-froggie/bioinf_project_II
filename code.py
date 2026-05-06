@@ -1,7 +1,13 @@
 # %% [markdown]
-# https://tdcommons.ai/single_pred_tasks/adme/#solubility-aqsoldb
-# Aqeuous solubility measures a drug's ability to dissolve in water. Poor water solubility could lead to slow drug absorptions, inadequate bioavailablity and even induce toxicity. More than 40% of new chemical entities are not soluble. 
-
+# Source: https://tdcommons.ai/single_pred_tasks/adme/#solubility-aqsoldb
+# <br>
+# **Aqueous solubility** ($log\ mol/L$) is a property that dictates how a drug is absorbed, its bioavailability, and its potential toxicity.  
+# <br>
+# The AqSolDB dataset is a collection of aqueous solubility data for 9,980 unique chemical compounds. 
+# The dataset contains:
+# - Drug_ID
+# - SMILES Strings: 2D chemical structures of the molecules.
+# - Target ($Y$): Experimental solubility values measured on a logarithmic scale ($log\ mol/L$).
 # %% TASK 1
 import pandas as pd
 from tdc.single_pred import ADME
@@ -13,6 +19,8 @@ import umap
 import numpy as np
 from matplotlib import pyplot as plt
 import seaborn as sns
+import xgboost as xgb
+from sklearn.metrics import mean_squared_error
 
 # %%
 # 1. Data retrival
@@ -26,11 +34,13 @@ def merge_split(split):
     return pd.concat([train, test, valid])
 
 # df = merge_split(data.get_split())
-df = merge_split(create_scaffold_split(df, seed=42, frac=[0.7, 0.1, 0.2], entity=data.entity1_name))
+df = data.get_data()
 
 # 2. Conversion SMILES → Molecule Objects
 df['mol'] = df['Drug'].apply(lambda x: Chem.MolFromSmiles(x))
 df = df.dropna(subset=['mol']).reset_index(drop=True)
+
+df = merge_split(create_scaffold_split(df, seed=42, frac=[0.7, 0.1, 0.2], entity=data.entity1_name))
 
 # 3. Basic desctiptors
 df['MolWt'] = df['mol'].apply(Descriptors.MolWt)          # Molecular Weight - sum of the atomic weights of all atoms in a molecule
@@ -42,6 +52,14 @@ summary_table = df[['Y', 'MolWt', 'LogP', 'NumHDonors', 'NumHAcceptors']].descri
 
 print("--- Summary Table ---")
 print(summary_table)
+# %% [markdown]
+# ### Table analysis
+# - Solubility ($Y$): With a mean of -2.89 and a range spanning from -13.17 to 2.14, the dataset covers a massive spectrum of solubility. The standard deviation of 2.37 indicates high variability, which is ideal for training a machine learning model.  
+# <br>
+# - Molecular Weight (MolWt): The average weight is 266.69 g/mol, which is typical for "small molecule" drugs. However, the maximum value of 5,299 g/mol shows the inclusion of very large, complex structures.
+# - LogP (Lipophilicity): The mean LogP of 1.98 suggests that the average molecule in the set is slightly hydrophobic (prefers oil over water). The extreme range (-40.87 to 68.54) reflects an incredibly diverse set of chemical behaviors.  
+# - Hydrogen Bond Descriptors: The molecules have an average of 1.11 donors and 3.41 acceptors. These features are critical for solubility because they dictate how well a molecule can bond with water molecules to dissolve
+
 # %% TASK 2
 # 1. Generate InChIKey for each molecule
 df['InChIKey'] = df['mol'].apply(lambda x: Chem.MolToInchiKey(x))
@@ -367,9 +385,222 @@ print(cor_mat)
 # %% TASK 6
 # %% [markdown]
 ### Selected Features:
-# - Morgan Fingerprints: To capture the local chemical environment of atoms (structure).
-# - LogP: Important for solubility, as it measures lipophilicity.
-# - Molecular Weight (MolWt): Larger molecules often have lower solubility due to crystal lattice energy.
-# - H-Bond Donors/Acceptors: Solubility in water is heavily driven by a molecule's ability to form hydrogen bonds with water molecules.
+# - **Morgan Fingerprints**: To capture the local chemical environment of atoms (structure).
+# - **LogP**: Important for solubility, as it measures lipophilicity.
+# - **Molecular Weight (MolWt)**: Larger molecules often have lower solubility due to crystal lattice energy.
+# - **H-Bond Donors/Acceptors**: Solubility in water is heavily driven by a molecule's ability to form hydrogen bonds with water molecules.
+
+# %%
+def prepare_X(df, feature_cols, fingerprint_col):
+    features = df.loc[:, feature_cols].to_numpy()
+    fingerprints = np.array(list(df[fingerprint_col]))
+    return np.hstack([features, fingerprints])
+
+def prepare_dataset(df):
+    X = prepare_X(df, ["MolWt", "LogP", "NumHDonors"], [col for col in df.columns if col.startswith('morgan_')][0])
+    y = df.Y.to_numpy()
+    train_idx = df.split == "train"
+    test_idx = df.split == "test"
+    valid_idx = df.split == "valid"
+    X_train = X[train_idx]
+    y_train = y[train_idx]
+    X_test = X[test_idx]
+    y_test = y[test_idx]
+    X_valid = X[valid_idx]
+    y_valid = y[valid_idx]
+    return X_train, y_train, X_test, y_test, X_valid, y_valid
+
+prepare_dataset(fdf)
+
+# %%
+def train_xgboost_models(train_df, test_df, target_name):
+    """
+    Trains XGBoost models using all 9 Morgan fingerprint combinations.
+    Calculates accuracy on test set for each model and keeps the best model.
+    
+    Args:
+        train_df (pd.DataFrame): Training dataframe with fingerprint columns
+        test_df (pd.DataFrame): Test dataframe with fingerprint columns
+        
+    Returns:
+        tuple: (results_dict, best_model_info) where:
+            - results_dict: Dictionary with fingerprint names as keys and accuracies as values
+            - best_model_info: Dictionary with 'model', 'fingerprint_col', 'accuracy', 
+                             'X_train', 'X_test', 'y_train', 'y_test' for the best model
+    """
+    if len(train_df) == 0 or len(test_df) == 0:
+        print("Error: Train or test dataframes are empty.")
+        return {}, {}
+    
+    # Get all Morgan fingerprint columns
+    fingerprint_cols = [col for col in train_df.columns if col.startswith('morgan_')]
+    
+    if len(fingerprint_cols) == 0:
+        print("Error: No Morgan fingerprint columns found.")
+        return {}, {}
+    
+    print(f"\nTraining XGBoost models for {len(fingerprint_cols)} fingerprint combinations...")
+    
+    # Extract target variable
+    if target_name not in train_df.columns or target_name not in test_df.columns:
+        print(f"Error: {target_name} column not found in dataframes.")
+        return {}, {}
+    
+    y_train = train_df[target_name].values
+    y_test = test_df[target_name].values
+    
+    results = {}
+    best_model = None
+    best_accuracy = float("inf")
+    best_fp_col = None
+    best_X_train = None
+    best_X_test = None
+    best_y_train = None
+    best_y_test = None
+    
+    for fp_col in sorted(fingerprint_cols):
+        print(f"\n  Training model for {fp_col}...")
+        
+        # Extract fingerprints and convert to numpy arrays
+        X_train_list = []
+        X_test_list = []
+        train_indices = []
+        test_indices = []
+        
+        # Process training data
+        for idx, row in train_df.iterrows():
+            fp_list = row[fp_col]
+            if fp_list is not None and len(fp_list) > 0:
+                X_train_list.append(np.array(fp_list, dtype=np.float32))
+                train_indices.append(idx)
+        
+        # Process test data
+        for idx, row in test_df.iterrows():
+            fp_list = row[fp_col]
+            if fp_list is not None and len(fp_list) > 0:
+                X_test_list.append(np.array(fp_list, dtype=np.float32))
+                test_indices.append(idx)
+        
+        if len(X_train_list) == 0 or len(X_test_list) == 0:
+            print(f"    Warning: No valid fingerprints found for {fp_col}")
+            results[fp_col] = 0.0
+            continue
+        
+        # Convert to numpy arrays
+        X_train = np.array(X_train_list)
+        X_test = np.array(X_test_list)
+        y_train_valid = y_train[train_indices]
+        y_test_valid = y_test[test_indices]
+        
+        print(f"    Train samples: {len(X_train)}, Test samples: {len(X_test)}")
+        
+        # Train XGBoost classifier
+        # try:
+        model = xgb.XGBRegressor(
+            n_estimators=100,
+            max_depth=6,
+            learning_rate=0.1,
+            random_state=42,
+            eval_metric='logloss',
+            use_label_encoder=False
+        )
+        
+        model.fit(X_train, y_train_valid)
+        
+        # Predict on test set
+        y_pred = model.predict(X_test)
+        
+        # Calculate accuracy
+        accuracy = mean_squared_error(y_test_valid, y_pred)
+        results[fp_col] = accuracy
+        
+        print(f"    Test accuracy: {accuracy:.4f}")
+        
+        # Track best model
+        if accuracy < best_accuracy:
+            best_accuracy = accuracy
+            best_model = model
+            best_fp_col = fp_col
+            best_X_train = X_train
+            best_X_test = X_test
+            best_y_train = y_train_valid
+            best_y_test = y_test_valid
+            print(f"    * New best model! (accuracy: {accuracy:.4f})")
+            
+        # except Exception as e:
+        #     print(f"    Error training model: {e}")
+        #     results[fp_col] = 0.0
+    
+    # Print results dictionary
+    print(f"\n" + "="*50)
+    print("XGBoost Training Results:")
+    print("="*50)
+    for fp_col, acc in sorted(results.items(), key=lambda x: x[1], reverse=True):
+        print(f"  {fp_col}: {acc:.4f}")
+    
+    # Create bar plot
+    if len(results) > 0:
+        fig, ax = plt.subplots(figsize=(12, 6))
+        
+        # Sort by accuracy for better visualization
+        sorted_results = sorted(results.items(), key=lambda x: x[1], reverse=True)
+        fp_names = [name.replace('morgan_', '') for name, _ in sorted_results]
+        accuracies = [acc for _, acc in sorted_results]
+        
+        bars = ax.bar(range(len(fp_names)), accuracies, color='steelblue', alpha=0.7)
+        ax.set_xlabel('Fingerprint Configuration', fontsize=12)
+        ax.set_ylabel('Test Accuracy', fontsize=12)
+        ax.set_title('XGBoost Test Accuracy for Different Morgan Fingerprint Configurations', 
+                     fontsize=14, fontweight='bold')
+        ax.set_xticks(range(len(fp_names)))
+        ax.set_xticklabels(fp_names, rotation=45, ha='right')
+        ax.set_ylim([0, 1])
+        ax.grid(axis='y', alpha=0.3)
+        
+        # Add value labels on bars
+        for bar, acc in zip(bars, accuracies):
+            height = bar.get_height()
+            ax.text(bar.get_x() + bar.get_width()/2., height,
+                   f'{acc:.3f}',
+                   ha='center', va='bottom', fontsize=9)
+        
+        plt.tight_layout()
+        plt.show()
+    
+    # Prepare best model info
+    best_model_info = {}
+    if best_model is not None:
+        best_model_info = {
+            'model': best_model,
+            'fingerprint_col': best_fp_col,
+            'accuracy': best_accuracy,
+            'X_train': best_X_train,
+            'X_test': best_X_test,
+            'y_train': best_y_train,
+            'y_test': best_y_test
+        }
+        print(f"\n" + "="*50)
+        print(f"Best Model Summary:")
+        print(f"  Fingerprint: {best_fp_col}")
+        print(f"  Test Accuracy: {best_accuracy:.4f}")
+        print(f"  Model saved for further evaluation.")
+        print("="*50)
+    else:
+        print("\nWarning: No valid model was trained.")
+    
+    return results, best_model_info
+
+# Train XGBoost models
+print("Training XGBoost models...")
+xgboost_results, best_model_info = train_xgboost_models(fdf.loc[fdf.split == "train"], fdf.loc[fdf.split == "train"], "Y")
+
+print(f"\nFinal results dictionary:")
+print(xgboost_results)
+
+if best_model_info:
+    print(f"\nBest model available for further evaluation:")
+    print(f"  Fingerprint: {best_model_info['fingerprint_col']}")
+    print(f"  Accuracy: {best_model_info['accuracy']:.4f}")
+    print(f"  Model object: {type(best_model_info['model']).__name__}")
 
 # %%

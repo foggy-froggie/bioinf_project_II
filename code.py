@@ -20,7 +20,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 import seaborn as sns
 import xgboost as xgb
-from sklearn.metrics import mean_squared_error
+from sklearn.metrics import root_mean_squared_error
 
 # %%
 # 1. Data retrival
@@ -391,10 +391,27 @@ print(cor_mat)
 # - **H-Bond Donors/Acceptors**: Solubility in water is heavily driven by a molecule's ability to form hydrogen bonds with water molecules.
 
 # %%
+def embed_fingerprints(fingerprints, q=8):
+    arr = np.array(list(fingerprints))
+    n = arr.shape[-1]
+    m = n // q
+    assert m * q == n
+    bit_weights = 2**np.arange(q, dtype=float)
+    arr = arr.reshape((-1, m, q))
+    arr = np.sum(arr * bit_weights[np.newaxis, np.newaxis, :], axis=-1)
+    arr /= (2**q-1)
+    return arr
+
+# %%
+embedding = embed_fingerprints(fdf.morgan_r3_l1024)
+
+# %%
 def prepare_X(df, feature_cols, fingerprint_col):
     features = df.loc[:, feature_cols].to_numpy()
     fingerprints = np.array(list(df[fingerprint_col]))
+    # fingerprints = embed_fingerprints(df[fingerprint_col], 32)
     return np.hstack([features, fingerprints])
+    # return features
 
 def prepare_dataset(df):
     X = prepare_X(df, ["MolWt", "LogP", "NumHDonors"], [col for col in df.columns if col.startswith('morgan_')][0])
@@ -410,7 +427,54 @@ def prepare_dataset(df):
     y_valid = y[valid_idx]
     return X_train, y_train, X_test, y_test, X_valid, y_valid
 
-prepare_dataset(fdf)
+X_train, y_train, X_test, y_test, X_valid, y_valid = prepare_dataset(fdf)
+
+# %%
+model = xgb.XGBRegressor(
+    n_estimators=100,
+    max_depth=6,
+    learning_rate=0.1,
+    random_state=42,
+    eval_metric=root_mean_squared_error,
+    use_label_encoder=False
+)
+
+# %%
+model = xgb.XGBRegressor(
+    n_estimators=1000,        # large, but use early stopping
+    learning_rate=0.03,      # small = safer generalization
+    max_depth=10,             # shallow trees reduce overfitting
+    min_child_weight=5,      # prevents tiny leaf splits
+    subsample=0.7,           # row sampling
+    colsample_bytree=0.8,    # VERY important for high-dim data
+    reg_alpha=1.0,           # L1 regularization (feature selection)
+    reg_lambda=5.0,          # L2 regularization
+    gamma=1.0,               # require meaningful splits
+    objective='reg:squarederror',
+    tree_method='hist',      # faster + good default
+    random_state=42,
+    early_stopping_rounds=10,
+)
+
+# %%
+model.fit(
+    X_train, y_train,
+    eval_set=[(X_valid, y_valid)],
+    verbose=True,
+)
+
+# %%
+# Predict on test set
+y_pred = model.predict(X_test)
+
+# Calculate accuracy
+accuracy = root_mean_squared_error(y_test, y_pred)
+accuracy
+
+# %%
+(root_mean_squared_error(y_train, model.predict(X_train)),
+root_mean_squared_error(y_test, model.predict(X_test)),
+root_mean_squared_error(y_valid, model.predict(X_valid)))
 
 # %%
 def train_xgboost_models(train_df, test_df, target_name):

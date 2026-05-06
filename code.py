@@ -369,10 +369,10 @@ print(target_correlations)
 # %% TASK 6
 # %% [markdown]
 ### Selected Features:
-# - Morgan Fingerprints: To capture the local chemical environment of atoms (structure).
-# - LogP: Important for solubility, as it measures lipophilicity.
-# - Molecular Weight (MolWt): Larger molecules often have lower solubility due to crystal lattice energy.
-# - H-Bond Donors/Acceptors: Solubility in water is heavily driven by a molecule's ability to form hydrogen bonds with water molecules.
+# - **Morgan Fingerprints**: To capture the local chemical environment of atoms (structure).
+# - **LogP**: Important for solubility, as it measures lipophilicity.
+# - **Molecular Weight (MolWt)**: Larger molecules often have lower solubility due to crystal lattice energy.
+# - **H-Bond Donors/Acceptors**: Solubility in water is heavily driven by a molecule's ability to form hydrogen bonds with water molecules.
 
 # %%
 def train_xgboost_models(train_df, test_df, target_name):
